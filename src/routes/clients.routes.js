@@ -15,7 +15,14 @@ const createClientSchema = z.object({
 
 // GET /clients — Super Admin/Servicing Team see all; HR/Employee never hit this route.
 router.get("/", requireAuth, requireRole("SUPER_ADMIN", "SERVICING_TEAM"), async (req, res) => {
-  const clients = await prisma.client.findMany({ orderBy: { createdAt: "desc" } });
+  const clients = await prisma.client.findMany({
+  orderBy: { createdAt: "desc" },
+  include: {
+    employees: true,
+    hrNodes: true,
+    policies: true,
+  },
+});
   res.json(clients);
 });
 
