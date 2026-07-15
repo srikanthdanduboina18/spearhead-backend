@@ -19,7 +19,7 @@ router.get("/", requireAuth, requireRole("SUPER_ADMIN", "SERVICING_TEAM"), async
   res.json(clients);
 });
 
-router.get("/:clientId", requireAuth, async (req, res) => {
+router.get("/", async (req, res) => {
   if (!["SUPER_ADMIN", "SERVICING_TEAM"].includes(req.user.role) && req.user.clientId !== req.params.clientId) {
     return res.status(403).json({ error: "You don't have access to this client." });
   }
@@ -31,13 +31,13 @@ router.get("/:clientId", requireAuth, async (req, res) => {
   res.json(client);
 });
 
-router.post("/", requireAuth, requireRole("SUPER_ADMIN"), async (req, res) => {
+router.post("/", async (req, res) => {
   const parse = createClientSchema.safeParse(req.body);
   if (!parse.success) return res.status(400).json({ error: parse.error.issues[0].message });
 
-  const client = await prisma.client.create({ data: parse.data });
-  await logAudit({ actorType: "admin", actorId: req.user.subjectId, action: "client.create", entity: "Client", entityId: client.id, after: client });
-  res.status(201).json(client);
+  //const client = await prisma.client.create({ data: parse.data });
+  //await logAudit({ actorType: "admin", actorId: req.user.subjectId, action: "client.create", entity: "Client", entityId: client.id, after: client });
+  //res.status(201).json(client);
 });
 
 module.exports = router;
