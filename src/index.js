@@ -15,7 +15,21 @@ const payrollRoutes = require("./routes/payroll.routes");
 
 const app = express();
 
-app.use(cors({ origin: env.APP_BASE_URL, credentials: true }));
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://spearhead-eb-platform.vercel.app"
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use(cookieParser());
 app.use(morgan("dev"));
