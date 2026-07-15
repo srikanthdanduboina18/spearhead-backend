@@ -1,0 +1,236 @@
+// Spearhead EB Platform — Prisma schema
+// Run `npx prisma migrate dev --name init` after setting DATABASE_URL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  SERVICING_TEAM
+  CLIENT_HR
+  EMPLOYEE
+}
+
+enum EmployeeStatus {
+  INVITED
+  SUBMITTED
+  ENROLLED
+  ACTIVE
+  REMOVED
+}
+
+enum PolicyType {
+  HEALTH
+  ACCIDENT
+  LIFE
+  GRATUITY
+}
+
+enum PolicyStatus {
+  PENDING_ISSUANCE
+  ISSUED
+  LAPSED
+}
+
+enum ClaimType {
+  CASHLESS
+  REIMBURSEMENT
+}
+
+enum ClaimStatus {
+  INTIMATED
+  UNDER_PROCESS
+  APPROVED
+  REJECTED
+  SETTLED
+}
+
+// ---------- Core tenant ----------
+
+model Client {
+  id          String       @id @default(cuid())
+  name        String
+  code        String       @unique
+  gstin       String?
+  address     String?
+  status      String       @default("active")
+  createdAt   DateTime     @default(now())
+
+  hrNodes     HrNode[]
+  policies    Policy[]
+  employees   Employee[]
+  payrollBatches PayrollBatch[]
+}
+
+// ---------- HR hierarchy (self-referencing tree) ----------
+
+model HrNode {
+  id            String    @id @default(cuid())
+  client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId      String
+  parent        HrNode?   @relation("HrTree", fields: [parentId], references: [id])
+  parentId      String?
+  children      HrNode[]  @relation("HrTree")
+
+  name          String
+  designation   String?
+  email         String    @unique
+  mobile        String?
+  scope         String?   // free-text description of which employees/locations this node can see
+
+  passwordHash  String?   // only used if a client chooses password login instead of magic link
+  createdAt     DateTime  @default(now())
+}
+
+// ---------- Policies ----------
+
+model Policy {
+  id            String       @id @default(cuid())
+  client        Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId      String
+  type          PolicyType
+  insurer       String
+  tpa           String?
+  policyNumber  String?
+  status        PolicyStatus @default(PENDING_ISSUANCE)
+  startDate     DateTime?
+  endDate       DateTime?
+  createdAt     DateTime     @default(now())
+
+  employeePolicies EmployeePolicy[]
+}
+
+// ---------- Employees & dependents ----------
+
+model Employee {
+  id              String          @id @default(cuid())
+  client          Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId        String
+  empCode         String
+  name            String
+  dob             DateTime?
+  gender          String?
+  maritalStatus   String?
+  doj             DateTime?
+  designation     String?
+  email           String
+  mobile          String?
+  status          EmployeeStatus  @default(INVITED)
+  removedAt       DateTime?
+  removedReason   String?
+  createdAt       DateTime        @default(now())
+
+  dependents      Dependent[]
+  employeePolicies EmployeePolicy[]
+  enrollmentLinks EnrollmentLink[]
+  emailLogs       EmailLog[]
+  claims          Claim[]
+
+  @@unique([clientId, empCode])
+}
+
+model EmployeePolicy {
+  id          String    @id @default(cuid())
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId  String
+  policy      Policy    @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  policyId    String
+  tpaMemberId String?
+  cardIssuedAt DateTime?
+
+  @@unique([employeeId, policyId])
+}
+
+model Dependent {
+  id          String    @id @default(cuid())
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId  String
+  relation    String    // Spouse, Son, Daughter, Parent, Parent-in-law
+  name        String
+  dob         DateTime?
+  gender      String?
+  createdAt   DateTime  @default(now())
+}
+
+// ---------- Auth: magic links ----------
+
+model EnrollmentLink {
+  id          String    @id @default(cuid())
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId  String
+  tokenHash   String    @unique // store a hash, never the raw token
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model LoginToken {
+  id          String    @id @default(cuid())
+  subjectType String    // "hr" | "employee" | "admin"
+  subjectId   String
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+// ---------- Payroll sync ----------
+
+model PayrollBatch {
+  id          String    @id @default(cuid())
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId    String
+  month       String    // e.g. "2026-07"
+  uploadedBy  String
+  addedCodes  String[]
+  removedCodes String[]
+  processedAt DateTime  @default(now())
+}
+
+// ---------- Claims ----------
+
+model Claim {
+  id            String      @id @default(cuid())
+  employee      Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId    String
+  type          ClaimType
+  hospital      String?
+  admissionDate DateTime?
+  status        ClaimStatus @default(INTIMATED)
+  tpaRefNumber  String?
+  documents     String[]    // S3 object keys
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+// ---------- Audit & email logs ----------
+
+model EmailLog {
+  id          String    @id @default(cuid())
+  employee    Employee? @relation(fields: [employeeId], references: [id])
+  employeeId  String?
+  toEmail     String
+  ccEmails    String?
+  subject     String
+  template    String?
+  sentAt      DateTime  @default(now())
+  status      String    @default("sent")
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  actorType   String    // "admin" | "hr" | "employee"
+  actorId     String
+  action      String    // e.g. "employee.status.update"
+  entity      String
+  entityId    String
+  before      Json?
+  after       Json?
+  at          DateTime  @default(now())
+}
