@@ -1,3 +1,4 @@
+
 const nodemailer = require("nodemailer");
 const env = require("../config/env");
 const prisma = require("./prisma");
@@ -25,20 +26,38 @@ if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) {
  * @param {string} [opts.template]
  * @param {string} [opts.employeeId]
  */
+
 async function sendMail({ to, cc = [], subject, html, template, employeeId }) {
+  
   const ccStr = cc.join(", ");
 
   if (transporter) {
-    await transporter.sendMail({
-      from: env.MAIL_FROM,
-      to,
-      cc: ccStr || undefined,
-      subject,
-      html,
-    });
+    const info = await transporter.sendMail({
+  from: env.MAIL_FROM,
+  to,
+  cc: ccStr || undefined,
+  subject,
+  html,
+});
+
+console.log("✅ Email sent successfully");
+console.log(info);
   } else {
     console.log(`\n[mailer:dev] To: ${to}${ccStr ? ` | CC: ${ccStr}` : ""}\nSubject: ${subject}\n${html}\n`);
   }
+  if (transporter) {
+  console.log("✅ SMTP transporter created");
+
+  transporter.verify(function (error, success) {
+    if (error) {
+      console.log("❌ SMTP Error:", error);
+    } else {
+      console.log("✅ SMTP Server Ready");
+    }
+  });
+} else {
+  console.log("❌ SMTP NOT configured");
+}
 
   await prisma.emailLog.create({
     data: {

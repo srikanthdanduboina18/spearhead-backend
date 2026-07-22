@@ -35,11 +35,22 @@ async function consumeLoginToken(raw) {
 /** Same pattern, dedicated table for the enrollment flow specifically. */
 async function createEnrollmentLink(employeeId) {
   const raw = crypto.randomBytes(32).toString("hex");
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days for first-enrollment links
+
+  const expiresAt = new Date(
+    Date.now() + 7 * 24 * 60 * 60 * 1000
+  );
+
   await prisma.enrollmentLink.create({
-    data: { employeeId, tokenHash: hashToken(raw), expiresAt },
+    data: {
+      employeeId,
+      tokenHash: hashToken(raw),
+      expiresAt,
+    },
   });
-  return `${env.APP_BASE_URL}/enroll?token=${raw}`;
+
+  // Return the URL using the raw token
+  return `${env.APP_BASE_URL}/enroll/${raw}`;
+
 }
 
 async function consumeEnrollmentLink(raw) {

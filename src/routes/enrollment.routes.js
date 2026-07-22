@@ -36,15 +36,20 @@ router.get("/:token", async (req, res) => {
     if (!employee) return res.status(404).json({ error: "Enrollment record not found." });
 
     res.json({
-      employee: {
-        id: employee.id,
-        empCode: employee.empCode,
-        name: employee.name,
-        email: employee.email,
-        status: employee.status,
-        policyTypes: employee.employeePolicies.map((ep) => ep.policy.type),
-      },
-    });
+  employee: {
+    id: employee.id,
+    empCode: employee.empCode,
+    name: employee.name,
+    email: employee.email,
+    mobile: employee.mobile,
+    dob: employee.dob,
+    gender: employee.gender,
+    maritalStatus: employee.maritalStatus,
+    status: employee.status,
+    policyTypes: employee.employeePolicies.map((ep) => ep.policy.type),
+    dependents: employee.dependents,
+  },
+});
   } catch (e) {
     res.status(410).json({ error: e.message });
   }
